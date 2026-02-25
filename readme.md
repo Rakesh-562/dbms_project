@@ -95,7 +95,6 @@ This system mirrors Git's core concepts — **branches, commits, diffs, merges, 
 
 | File | Purpose |
 |------|---------|
-| `00_install_all.sql` | **One-step installer** — runs all files in correct order |
 | `setup.sql` | Banking database schema + seed data (15 tables) |
 | `01_vcs_schema.sql` | VCS metadata tables (config, repo, branch, commit, change, tag) |
 | `02_vcs_core_functions.sql` | Core: `vcs_init`, `vcs_commit`, `vcs_status`, trigger system |
@@ -103,8 +102,7 @@ This system mirrors Git's core concepts — **branches, commits, diffs, merges, 
 | `04_vcs_history_functions.sql` | History: `vcs_log`, `vcs_diff`, `vcs_show`, `vcs_blame`, `vcs_tag` |
 | `05_vcs_rollback_functions.sql` | Rollback: `vcs_rollback`, `vcs_time_travel`, `vcs_snapshot` |
 | `06_demo_walkthrough.sql` | End-to-end demo exercising every feature (auto-resets on re-run) |
-| `07_reset_vcs.sql` | Manual reset script — clears VCS data for fresh demo run |
-| `install.ps1` | PowerShell helper script for Windows installation |
+
 
 ---
 
@@ -115,19 +113,6 @@ This system mirrors Git's core concepts — **branches, commits, diffs, merges, 
 
 ### Installation
 
-**Option 1: One-Step Install + Demo (Recommended for Windows)**
-```powershell
-.\install.ps1      # Install VCS system
-.\run_demo.ps1     # Run the demo (can run multiple times)
-```
-
-**Option 2: One-Step Install (SQL)**
-```sql
-\i 00_install_all.sql
-\i 06_demo_walkthrough.sql
-```
-
-**Option 3: Manual Install (Step-by-Step)**
 ```sql
 -- 1. Create the banking database
 \i setup.sql
@@ -142,17 +127,7 @@ This system mirrors Git's core concepts — **branches, commits, diffs, merges, 
 -- 3. Run the full demo
 \i 06_demo_walkthrough.sql
 
--- 4. (Optional) Reset VCS data to run demo again
-\i 07_reset_vcs.sql
-```
 
-**⚠️ Common Error:** If you see `function vcs_branch_list() does not exist`, you skipped step 2 or ran files out of order. Run `00_install_all.sql` to fix it.
-
-**ℹ️ INFO Messages:** You may see messages like `"trigger does not exist, skipping"` - these are harmless notices during first-time setup.
-
-**🔄 Re-running the Demo:** The demo automatically detects and cleans up previous run data. You can safely run it multiple times without errors.
-
----
 
 ## Usage Guide
 
