@@ -145,3 +145,4 @@ INSERT INTO vcs_commit (branch_name, commit_hash, message, author)
 VALUES ('main', md5('genesis-' || NOW()::TEXT), 'Initial commit - system initialized', CURRENT_USER);
 
 SELECT '✅ VCS Schema created successfully. System initialized with main branch.' AS status;
+select* from vcs_config;

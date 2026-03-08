@@ -36,7 +36,6 @@ BEGIN
         RETURN '⚠️  Target commit is at or ahead of HEAD. Nothing to rollback.';
     END IF;
     
-    -- Iterate changes in REVERSE order (newest first) from HEAD back to target
     FOR v_change IN (
         SELECT ch.*, co.commit_id as cid
         FROM vcs_change ch
@@ -47,29 +46,26 @@ BEGIN
         ORDER BY co.committed_at DESC, ch.change_id DESC
     ) LOOP
         IF NOT p_dry_run THEN
-            -- Get PK column for this table
             SELECT primary_key_column INTO v_pk_col
             FROM vcs_repository WHERE table_name = v_change.table_name;
             
-            -- Apply inverse operation
             IF v_change.operation = 'INSERT' THEN
-                -- Undo INSERT → DELETE the row
+                -- ✅ Cast row_pk to match the PK column type
                 EXECUTE format(
-                    'DELETE FROM %I WHERE %I = $1',
+                    'DELETE FROM %I WHERE %I::TEXT = $1',
                     v_change.table_name, v_pk_col
                 ) USING v_change.row_pk;
                 
             ELSIF v_change.operation = 'DELETE' THEN
-                -- Undo DELETE → Re-INSERT the old row
                 EXECUTE format(
                     'INSERT INTO %I SELECT * FROM jsonb_populate_record(NULL::%I, $1)',
                     v_change.table_name, v_change.table_name
                 ) USING v_change.old_data;
                 
             ELSIF v_change.operation = 'UPDATE' THEN
-                -- Undo UPDATE → Restore old values
+                -- ✅ Cast row_pk to match the PK column type
                 EXECUTE format(
-                    'UPDATE %I SET (%s) = (SELECT %s FROM jsonb_populate_record(NULL::%I, $1)) WHERE %I = $2',
+                    'UPDATE %I SET (%s) = (SELECT %s FROM jsonb_populate_record(NULL::%I, $1)) WHERE %I::TEXT = $2',
                     v_change.table_name,
                     array_to_string(v_change.changed_columns, ', '),
                     array_to_string(v_change.changed_columns, ', '),
@@ -85,8 +81,6 @@ BEGIN
     IF p_dry_run THEN
         v_result := format('🔍 DRY RUN: Would rollback %s change(s) to commit #%s', v_rollback_count, p_to_commit_id);
     ELSE
-        -- The trigger will auto-stage these reverse operations
-        -- Commit the rollback as a new commit
         IF v_rollback_count > 0 THEN
             PERFORM vcs_commit(
                 format('Rollback to commit #%s (%s changes reverted)', p_to_commit_id, v_rollback_count),
@@ -99,7 +93,6 @@ BEGIN
     RETURN v_result;
 END;
 $$ LANGUAGE plpgsql;
-
 -- ============================================================
 -- VCS_RECONSTRUCT_AT: Reconstruct what a row looked like at 
 -- a specific commit by replaying changes forward from genesis.
