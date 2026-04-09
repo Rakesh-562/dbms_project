@@ -44,19 +44,19 @@ export default function VcsBranchesPage() {
         <Card className="lg:col-span-2 p-0">
           <DataTable
             columns={[
-              { key: 'branch_name', label: 'Name', render: (r) => (
+              { key: 'branch', label: 'Name', render: (r) => (
                 <span className="flex items-center gap-2">
-                  {r.is_current === '*' && <span className="w-2 h-2 rounded-full bg-green-500" />}
-                  <span className="font-medium">{r.branch_name}</span>
+                  {r.is_current && <span className="w-2 h-2 rounded-full bg-green-500" />}
+                  <span className="font-medium">{r.branch}</span>
                 </span>
               )},
               { key: 'commit_count', label: 'Commits' },
               { key: 'latest_commit', label: 'Latest', render: (r) =>
                 <span className="text-xs max-w-xs truncate block">{r.latest_commit}</span> },
               { key: 'actions', label: '', render: (r) =>
-                r.is_current !== '*' ? (
+                !r.is_current ? (
                   <button
-                    onClick={() => handleCheckout(r.branch_name)}
+                    onClick={() => handleCheckout(r.branch)}
                     className="text-indigo-600 hover:underline text-xs font-medium"
                   >
                     Checkout

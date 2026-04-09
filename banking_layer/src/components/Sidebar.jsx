@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, Building2, Briefcase, CreditCard,
   ArrowLeftRight, Receipt, Landmark, UserCog, GitBranch,
   GitCommitHorizontal, Tag, Clock, Search, RotateCcw, FileText, Database,
-  LogOut, User, Shield, ClipboardList, Key
+  LogOut, User, Shield, ClipboardList, Key, FlaskConical
 } from 'lucide-react';
 
 const managerBankingLinks = [
@@ -18,6 +18,7 @@ const managerBankingLinks = [
   { to: '/employees',      icon: Briefcase,        label: 'Employees' },
   { to: '/hr-updates',     icon: UserCog,          label: 'HR Updates' },
   { to: '/branches',       icon: Building2,        label: 'Branches' },
+  { to: '/acid-demo',      icon: FlaskConical,     label: 'ACID Demo' },
   { to: '/change-password', icon: Key,              label: 'Change Password' },
 ];
 

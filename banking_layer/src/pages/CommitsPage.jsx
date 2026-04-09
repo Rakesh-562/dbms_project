@@ -50,23 +50,32 @@ export default function CommitsPage() {
           {selected && detail.error && <ErrorBox message={detail.error} />}
           {selected && detail.data && (
             <div className="space-y-2 text-sm max-h-[60vh] overflow-y-auto">
-              {detail.data.map((row, i) => (
-                <div key={i} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
-                  <div className="flex justify-between">
-                    <Badge variant={row.operation === 'INSERT' ? 'green' : row.operation === 'DELETE' ? 'red' : 'amber'}>
-                      {row.operation}
-                    </Badge>
-                    <span className="text-xs text-gray-400">{row.table_name} / {row.row_pk}</span>
-                  </div>
-                  {row.field && (
-                    <div className="mt-2 grid grid-cols-3 gap-1 text-xs">
-                      <span className="font-medium text-gray-600">{row.field}</span>
-                      <span className="text-red-500 line-through">{row.old_value ?? '—'}</span>
-                      <span className="text-green-600">{row.new_value ?? '—'}</span>
-                    </div>
-                  )}
+              {/* Metadata rows */}
+              {detail.data.filter(r => r.field !== 'Changes').map((row, i) => (
+                <div key={`m${i}`} className="flex gap-2 text-sm">
+                  <span className="font-medium text-gray-500 min-w-[80px]">{row.field}</span>
+                  <span className="text-gray-900">{row.value}</span>
                 </div>
               ))}
+              {/* Change rows */}
+              {detail.data.filter(r => r.field === 'Changes').length > 0 && (
+                <div className="pt-2 border-t border-gray-100">
+                  <h4 className="text-xs font-semibold text-gray-500 uppercase mb-2">Changes</h4>
+                  {detail.data.filter(r => r.field === 'Changes').map((row, i) => {
+                    const m = row.value.match(/^(\w+):\s+(INSERT|UPDATE|DELETE)\s+(.+)/);
+                    const table = m ? m[1] : '?';
+                    const op = m ? m[2] : '?';
+                    const pk = m ? m[3] : row.value;
+                    return (
+                      <div key={`c${i}`} className="bg-gray-50 rounded-lg p-2 border border-gray-100 mb-1 flex items-center gap-2">
+                        <Badge variant={op === 'INSERT' ? 'green' : op === 'DELETE' ? 'red' : 'amber'}>{op}</Badge>
+                        <span className="text-gray-600 font-medium">{table}</span>
+                        <span className="text-gray-400 text-xs">PK {pk}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
               {detail.data.length === 0 && <p className="text-gray-400">No changes in this commit</p>}
             </div>
           )}

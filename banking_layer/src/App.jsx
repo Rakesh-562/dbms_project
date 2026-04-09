@@ -37,6 +37,7 @@ import CustomerLoansPage from './pages/CustomerLoansPage';
 import CustomerTransfersPage from './pages/CustomerTransfersPage';
 import CustomerProfilePage from './pages/CustomerProfilePage';
 import ChangePasswordPage from './pages/ChangePasswordPage';
+import AcidDemoPage from './pages/AcidDemoPage';
 
 function ManagerRoutes() {
   return (
@@ -59,6 +60,7 @@ function ManagerRoutes() {
       <Route path="vcs/blame" element={<BlamePage />} />
       <Route path="vcs/time-travel" element={<TimeTravelPage />} />
       <Route path="vcs/rollback" element={<RollbackPage />} />
+      <Route path="acid-demo" element={<AcidDemoPage />} />
       <Route path="change-password" element={<ChangePasswordPage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Route>

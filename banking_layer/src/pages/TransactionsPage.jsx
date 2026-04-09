@@ -25,17 +25,18 @@ export default function TransactionsPage() {
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState(empty);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
 
-  const openAdd = () => { setForm(empty); setModal(true); };
-  const close = () => setModal(false);
+  const openAdd = () => { setForm(empty); setFormError(null); setModal(true); };
+  const close = () => { setModal(false); setFormError(null); };
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {
-    setSaving(true);
+    setSaving(true); setFormError(null);
     try {
       await createTransaction(form);
       close(); refetch();
-    } catch { }
+    } catch (e) { setFormError(e.message || 'Save failed'); }
     finally { setSaving(false); }
   };
 
@@ -76,6 +77,7 @@ export default function TransactionsPage() {
             </Select>
           </FormField>
         </div>
+        {formError && <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{formError}</div>}
         <div className="flex justify-end gap-2 mt-4">
           <Btn variant="secondary" onClick={close}>Cancel</Btn>
           <Btn onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Btn>

@@ -29,19 +29,20 @@ export default function LoansPage() {
   const [modal, setModal] = useState(null);
   const [form, setForm] = useState(emptyLoan);
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
 
-  const openAdd = () => { setForm(emptyLoan); setModal('add'); };
-  const openEdit = (r) => { setForm({ ...r }); setModal(r); };
-  const close = () => setModal(null);
+  const openAdd = () => { setForm(emptyLoan); setFormError(null); setModal('add'); };
+  const openEdit = (r) => { setForm({ ...r }); setFormError(null); setModal(r); };
+  const close = () => { setModal(null); setFormError(null); };
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const save = async () => {
-    setSaving(true);
+    setSaving(true); setFormError(null);
     try {
       if (modal === 'add') await createLoan(form);
       else await updateLoan(form.loan_id, form);
       close(); refetch();
-    } catch { }
+    } catch (e) { setFormError(e.message || 'Save failed'); }
     finally { setSaving(false); }
   };
 
@@ -115,6 +116,7 @@ export default function LoansPage() {
             </>
           )}
         </div>
+        {formError && <div className="mt-3 p-3 bg-red-50 text-red-700 rounded-lg text-sm">{formError}</div>}
         <div className="flex justify-end gap-2 mt-4">
           <Btn variant="secondary" onClick={close}>Cancel</Btn>
           <Btn onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Btn>
