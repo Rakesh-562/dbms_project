@@ -85,8 +85,22 @@ export default function DiffPage() {
                   {r.operation}
                 </Badge> },
               { key: 'changed_columns', label: 'Changed', render: (r) =>
-                r.changed_columns ? r.changed_columns.join(', ') : '—' },
-              { key: 'branch', label: 'Branch', render: (r) => r.branch ? <Badge variant="indigo">{r.branch}</Badge> : '—' },
+                r.changed_columns
+                  ? (Array.isArray(r.changed_columns) ? r.changed_columns.join(', ') : String(r.changed_columns))
+                  : '—' },
+              { key: 'new_value', label: 'Value', render: (r) => {
+                const val = r.new_value || r.old_value;
+                if (!val) return '—';
+                if (typeof val === 'object') {
+                  return (
+                    <details className="text-xs max-w-xs">
+                      <summary className="cursor-pointer text-indigo-600">View data</summary>
+                      <pre className="mt-1 bg-gray-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">{JSON.stringify(val, null, 2)}</pre>
+                    </details>
+                  );
+                }
+                return <span className="text-xs max-w-xs truncate block">{String(val)}</span>;
+              }},
             ]}
             rows={result}
             emptyMsg="No differences found"

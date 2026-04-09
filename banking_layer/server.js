@@ -16,10 +16,16 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ── Helper ──
+// ── Helpers ──
 async function query(text, params) {
   const res = await pool.query(text, params);
   return res.rows;
+}
+/** Coerce empty-string / undefined to null, else parse as int. Returns null or integer. */
+function intOrNull(v) {
+  if (v === '' || v === undefined || v === null) return null;
+  const n = parseInt(v, 10);
+  return Number.isNaN(n) ? null : n;
 }
 
 // ════════════════════════════════════════════════════════════
@@ -30,6 +36,32 @@ app.get('/api/branches', async (_req, res) => {
   try {
     const rows = await query('SELECT * FROM branch ORDER BY branch_id');
     res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.post('/api/branches', async (req, res) => {
+  try {
+    const { branch_name, ifsc_code, address, city, state, pincode, phone, email, established_date } = req.body;
+    if (!branch_name) return res.status(400).json({ error: 'Branch name is required' });
+    if (!ifsc_code) return res.status(400).json({ error: 'IFSC code is required' });
+    if (!address || !city || !state || !pincode) return res.status(400).json({ error: 'Address, city, state, and pincode are required' });
+    const rows = await query(
+      `INSERT INTO branch (branch_name, ifsc_code, address, city, state, pincode, phone, email, established_date)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [branch_name, ifsc_code, address, city, state, pincode, phone || null, email || null, established_date || new Date().toISOString().slice(0,10)]);
+    res.json(rows[0]);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.put('/api/branches/:id', async (req, res) => {
+  try {
+    const { branch_name, phone, email, status } = req.body;
+    const rows = await query(
+      `UPDATE branch SET branch_name=COALESCE($1,branch_name), phone=COALESCE($2,phone),
+        email=COALESCE($3,email), status=COALESCE($4,status)
+       WHERE branch_id=$5 RETURNING *`,
+      [branch_name, phone, email, status, req.params.id]);
+    res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -524,13 +556,17 @@ app.post('/api/auth/change-password', async (req, res) => {
 // ── Customers CRUD ──
 app.post('/api/customers', async (req, res) => {
   try {
-    const { branch_id, assigned_rm_id, full_name, dob, gender, phone, email,
+    const { full_name, dob, gender, phone, email,
             occupation, income_bracket, aadhaar_number, pan_number, kyc_status } = req.body;
+    const bid = intOrNull(req.body.branch_id);
+    const rmId = intOrNull(req.body.assigned_rm_id);
+    if (!bid) return res.status(400).json({ error: 'Branch is required' });
+    if (!full_name) return res.status(400).json({ error: 'Full name is required' });
     const rows = await query(
       `INSERT INTO customer (branch_id, assigned_rm_id, full_name, dob, gender, phone, email,
         occupation, income_bracket, aadhaar_number, pan_number, kyc_status)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-      [branch_id, assigned_rm_id, full_name, dob, gender, phone, email,
+      [bid, rmId, full_name, dob, gender, phone, email,
        occupation, income_bracket, aadhaar_number || null, pan_number || null, kyc_status || 'pending']);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -553,13 +589,18 @@ app.put('/api/customers/:id', async (req, res) => {
 // ── Accounts CRUD ──
 app.post('/api/accounts', async (req, res) => {
   try {
-    const { customer_id, branch_id, opened_by, account_number, account_type,
-            min_balance, interest_rate } = req.body;
+    const { account_number, account_type, min_balance, interest_rate } = req.body;
+    const custId = intOrNull(req.body.customer_id);
+    const bid = intOrNull(req.body.branch_id);
+    const openedBy = intOrNull(req.body.opened_by);
+    if (!custId) return res.status(400).json({ error: 'Customer is required' });
+    if (!bid) return res.status(400).json({ error: 'Branch is required' });
+    if (!account_number) return res.status(400).json({ error: 'Account number is required' });
     const rows = await query(
       `INSERT INTO account (customer_id, branch_id, opened_by, account_number,
         account_type, min_balance, interest_rate)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [customer_id, branch_id, opened_by, account_number, account_type,
+      [custId, bid, openedBy, account_number, account_type,
        min_balance || 0, interest_rate || 0]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -580,9 +621,12 @@ app.put('/api/accounts/:id', async (req, res) => {
 // ── Transactions CRUD ──
 app.post('/api/transactions', async (req, res) => {
   try {
-    const { account_id, txn_type, channel, amount, description, initiated_by } = req.body;
+    const { txn_type, channel, amount, description } = req.body;
+    const acctId = intOrNull(req.body.account_id);
+    const initiatedBy = intOrNull(req.body.initiated_by);
+    if (!acctId) return res.status(400).json({ error: 'Account is required' });
     // Get current balance
-    const [acct] = await query('SELECT current_balance FROM account WHERE account_id=$1', [account_id]);
+    const [acct] = await query('SELECT current_balance FROM account WHERE account_id=$1', [acctId]);
     if (!acct) return res.status(404).json({ error: 'Account not found' });
     const bal = parseFloat(acct.current_balance);
     const amt = parseFloat(amount);
@@ -591,8 +635,8 @@ app.post('/api/transactions', async (req, res) => {
     const rows = await query(
       `INSERT INTO transaction (account_id,txn_type,channel,amount,balance_after,reference_number,description,initiated_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [account_id, txn_type, channel, amt, newBal, ref, description, initiated_by || null]);
-    await query('UPDATE account SET current_balance=$1 WHERE account_id=$2', [newBal, account_id]);
+      [acctId, txn_type, channel, amt, newBal, ref, description, initiatedBy]);
+    await query('UPDATE account SET current_balance=$1 WHERE account_id=$2', [newBal, acctId]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -600,13 +644,18 @@ app.post('/api/transactions', async (req, res) => {
 // ── Loans CRUD ──
 app.post('/api/loans', async (req, res) => {
   try {
-    const { customer_id, account_id, assigned_officer, loan_type, base_interest_rate,
+    const { loan_type, base_interest_rate,
             processing_fee_pct, applied_amount, purpose, collateral_type, collateral_desc, collateral_value } = req.body;
+    const custId = intOrNull(req.body.customer_id);
+    const acctId = intOrNull(req.body.account_id);
+    const officer = intOrNull(req.body.assigned_officer);
+    if (!custId) return res.status(400).json({ error: 'Customer is required' });
+    if (!acctId) return res.status(400).json({ error: 'Account is required' });
     const rows = await query(
       `INSERT INTO loan (customer_id,account_id,assigned_officer,loan_type,base_interest_rate,
         processing_fee_pct,applied_amount,purpose,collateral_type,collateral_desc,collateral_value)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
-      [customer_id, account_id, assigned_officer, loan_type, base_interest_rate,
+      [custId, acctId, officer, loan_type, base_interest_rate,
        processing_fee_pct || 0.5, applied_amount, purpose, collateral_type || 'none',
        collateral_desc || null, collateral_value || null]);
     res.json(rows[0]);
@@ -642,13 +691,15 @@ app.put('/api/loans/:id', async (req, res) => {
 // ── Fund Transfers CRUD ──
 app.post('/api/transfers', async (req, res) => {
   try {
-    const { from_account_id, to_account_id, to_ifsc, to_account_number,
-            transfer_mode, amount, remarks } = req.body;
+    const { to_ifsc, to_account_number, transfer_mode, amount, remarks } = req.body;
+    const fromId = intOrNull(req.body.from_account_id);
+    const toId = intOrNull(req.body.to_account_id);
+    if (!fromId) return res.status(400).json({ error: 'Source account is required' });
     const rows = await query(
       `INSERT INTO fund_transfer (from_account_id,to_account_id,to_ifsc,to_account_number,
         transfer_mode,amount,remarks)
        VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [from_account_id, to_account_id || null, to_ifsc || null,
+      [fromId, toId, to_ifsc || null,
        to_account_number || null, transfer_mode, amount, remarks || null]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -667,12 +718,17 @@ app.put('/api/transfers/:id', async (req, res) => {
 // ── Employees CRUD ──
 app.post('/api/employees', async (req, res) => {
   try {
-    const { branch_id, dept_id, manager_id, full_name, designation,
-            employment_type, join_date, salary } = req.body;
+    const { full_name, designation, employment_type, join_date, salary } = req.body;
+    const bid = intOrNull(req.body.branch_id);
+    const deptId = intOrNull(req.body.dept_id);
+    const mgrId = intOrNull(req.body.manager_id);
+    if (!bid) return res.status(400).json({ error: 'Branch is required' });
+    if (!full_name) return res.status(400).json({ error: 'Full name is required' });
+    if (!designation) return res.status(400).json({ error: 'Designation is required' });
     const rows = await query(
       `INSERT INTO employee (branch_id,dept_id,manager_id,full_name,designation,employment_type,join_date,salary)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-      [branch_id, dept_id, manager_id || null, full_name, designation,
+      [bid, deptId, mgrId, full_name, designation,
        employment_type || 'permanent', join_date, salary]);
     res.json(rows[0]);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -898,6 +954,230 @@ app.get('/api/customer/:custId/loan-applications', async (req, res) => {
       [req.params.custId]);
     res.json(rows);
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  ACID DEMO ENDPOINTS
+// ════════════════════════════════════════════════════════════
+
+// Get accounts for ACID demo dropdowns
+app.get('/api/acid/accounts', async (_req, res) => {
+  try {
+    const rows = await query(`
+      SELECT a.account_id, a.account_number, a.account_type, a.current_balance,
+             c.full_name AS customer_name
+      FROM account a JOIN customer c ON a.customer_id = c.customer_id
+      ORDER BY a.account_id`);
+    res.json(rows);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// 1. ATOMICITY — Transfer between accounts, optionally inject failure mid-way
+app.post('/api/acid/atomicity', async (req, res) => {
+  const { from_account_id, to_account_id, amount, inject_failure } = req.body;
+  const client = await pool.connect();
+  const log = [];
+  try {
+    // Read balances before
+    const before = await client.query(
+      'SELECT account_id, current_balance FROM account WHERE account_id IN ($1, $2) ORDER BY account_id',
+      [from_account_id, to_account_id]);
+    log.push({ step: 'READ_BEFORE', detail: `Balances before: ${JSON.stringify(before.rows)}` });
+
+    await client.query('BEGIN');
+    log.push({ step: 'BEGIN', detail: 'Transaction started' });
+
+    // Debit
+    await client.query(
+      'UPDATE account SET current_balance = current_balance - $1 WHERE account_id = $2',
+      [amount, from_account_id]);
+    log.push({ step: 'DEBIT', detail: `Debited ₹${amount} from account ${from_account_id}` });
+
+    if (inject_failure) {
+      log.push({ step: 'INJECTED_ERROR', detail: 'Simulated crash / network error after debit, before credit' });
+      await client.query('ROLLBACK');
+      log.push({ step: 'ROLLBACK', detail: 'Transaction rolled back — neither account changed' });
+
+      const after = await client.query(
+        'SELECT account_id, current_balance FROM account WHERE account_id IN ($1, $2) ORDER BY account_id',
+        [from_account_id, to_account_id]);
+      log.push({ step: 'READ_AFTER', detail: `Balances after rollback: ${JSON.stringify(after.rows)}` });
+
+      return res.json({ success: false, property: 'ATOMICITY', outcome: 'ROLLED_BACK', log });
+    }
+
+    // Credit
+    await client.query(
+      'UPDATE account SET current_balance = current_balance + $1 WHERE account_id = $2',
+      [amount, to_account_id]);
+    log.push({ step: 'CREDIT', detail: `Credited ₹${amount} to account ${to_account_id}` });
+
+    await client.query('COMMIT');
+    log.push({ step: 'COMMIT', detail: 'Transaction committed — both accounts updated atomically' });
+
+    const after = await client.query(
+      'SELECT account_id, current_balance FROM account WHERE account_id IN ($1, $2) ORDER BY account_id',
+      [from_account_id, to_account_id]);
+    log.push({ step: 'READ_AFTER', detail: `Balances after commit: ${JSON.stringify(after.rows)}` });
+
+    res.json({ success: true, property: 'ATOMICITY', outcome: 'COMMITTED', log });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    log.push({ step: 'ERROR_ROLLBACK', detail: `Error: ${e.message} — rolled back` });
+    res.json({ success: false, property: 'ATOMICITY', outcome: 'ERROR_ROLLBACK', log });
+  } finally { client.release(); }
+});
+
+// 2. CONSISTENCY — Try to violate constraints (negative balance, FK violation)
+app.post('/api/acid/consistency', async (req, res) => {
+  const { account_id, amount, test_type } = req.body;
+  const client = await pool.connect();
+  const log = [];
+  try {
+    const before = await client.query(
+      'SELECT account_id, current_balance, min_balance FROM account WHERE account_id = $1', [account_id]);
+    const acct = before.rows[0];
+    log.push({ step: 'READ_BEFORE', detail: `Account ${account_id}: balance=₹${acct.current_balance}, min_balance=₹${acct.min_balance}` });
+
+    await client.query('BEGIN');
+    log.push({ step: 'BEGIN', detail: 'Transaction started' });
+
+    if (test_type === 'negative_balance') {
+      // Try to withdraw more than balance
+      log.push({ step: 'ATTEMPT', detail: `Trying to withdraw ₹${amount} (balance is ₹${acct.current_balance})` });
+      const newBalance = parseFloat(acct.current_balance) - parseFloat(amount);
+      if (newBalance < parseFloat(acct.min_balance || 0)) {
+        await client.query('ROLLBACK');
+        log.push({ step: 'CONSTRAINT_VIOLATED', detail: `New balance would be ₹${newBalance.toFixed(2)}, below minimum ₹${acct.min_balance}` });
+        log.push({ step: 'ROLLBACK', detail: 'Database consistency preserved — transaction aborted' });
+        return res.json({ success: false, property: 'CONSISTENCY', outcome: 'CONSTRAINT_VIOLATION', log });
+      }
+    } else if (test_type === 'fk_violation') {
+      // Try to insert a transaction referencing a non-existent account
+      log.push({ step: 'ATTEMPT', detail: 'Trying to insert transaction for non-existent account 99999' });
+      try {
+        await client.query(
+          `INSERT INTO transaction (account_id, txn_type, amount, balance_after, description)
+           VALUES (99999, 'deposit', $1, $1, 'FK violation test')`, [amount]);
+      } catch (fkErr) {
+        log.push({ step: 'FK_ERROR', detail: `PostgreSQL rejected: ${fkErr.message}` });
+        await client.query('ROLLBACK');
+        log.push({ step: 'ROLLBACK', detail: 'Database consistency preserved — FK constraint enforced' });
+        return res.json({ success: false, property: 'CONSISTENCY', outcome: 'FK_VIOLATION', log });
+      }
+    }
+
+    // If constraints pass, allow it
+    await client.query(
+      'UPDATE account SET current_balance = current_balance - $1 WHERE account_id = $2',
+      [amount, account_id]);
+    log.push({ step: 'DEBIT', detail: `Withdrew ₹${amount} successfully (within limits)` });
+    await client.query('COMMIT');
+    log.push({ step: 'COMMIT', detail: 'Transaction committed — consistency maintained' });
+
+    const after = await client.query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'READ_AFTER', detail: `New balance: ₹${after.rows[0].current_balance}` });
+
+    res.json({ success: true, property: 'CONSISTENCY', outcome: 'COMMITTED', log });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    log.push({ step: 'ERROR', detail: `${e.message} — rolled back` });
+    res.json({ success: false, property: 'CONSISTENCY', outcome: 'ERROR', log });
+  } finally { client.release(); }
+});
+
+// 3. ISOLATION — Show concurrent transaction behaviour
+app.post('/api/acid/isolation', async (req, res) => {
+  const { account_id, amount } = req.body;
+  const clientA = await pool.connect();
+  const clientB = await pool.connect();
+  const log = [];
+  try {
+    const before = await clientA.query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'INITIAL', detail: `Account ${account_id} balance: ₹${before.rows[0].current_balance}` });
+
+    // Txn A starts and deducts
+    await clientA.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    log.push({ step: 'TXN_A_BEGIN', detail: 'Transaction A started (READ COMMITTED)' });
+
+    await clientA.query(
+      'UPDATE account SET current_balance = current_balance - $1 WHERE account_id = $2',
+      [amount, account_id]);
+    log.push({ step: 'TXN_A_DEBIT', detail: `Txn A: Debited ₹${amount} (not yet committed)` });
+
+    // Txn B reads — should see OLD value (Txn A not committed)
+    await clientB.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+    log.push({ step: 'TXN_B_BEGIN', detail: 'Transaction B started (READ COMMITTED)' });
+
+    const readB = await clientB.query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'TXN_B_READ', detail: `Txn B reads balance: ₹${readB.rows[0].current_balance} (sees OLD value — Txn A uncommitted)` });
+
+    // Now commit A
+    await clientA.query('COMMIT');
+    log.push({ step: 'TXN_A_COMMIT', detail: 'Transaction A committed' });
+
+    // Txn B reads again — now sees NEW value
+    const readB2 = await clientB.query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'TXN_B_READ_AGAIN', detail: `Txn B re-reads: ₹${readB2.rows[0].current_balance} (sees NEW value — Txn A committed)` });
+
+    await clientB.query('COMMIT');
+    log.push({ step: 'TXN_B_COMMIT', detail: 'Transaction B committed' });
+
+    res.json({ success: true, property: 'ISOLATION', outcome: 'DEMONSTRATED', log });
+  } catch (e) {
+    await clientA.query('ROLLBACK').catch(() => {});
+    await clientB.query('ROLLBACK').catch(() => {});
+    log.push({ step: 'ERROR', detail: e.message });
+    res.json({ success: false, property: 'ISOLATION', outcome: 'ERROR', log });
+  } finally { clientA.release(); clientB.release(); }
+});
+
+// 4. DURABILITY — Write data, confirm it persists after the transaction
+app.post('/api/acid/durability', async (req, res) => {
+  const { account_id, amount } = req.body;
+  const log = [];
+  try {
+    const before = await query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'READ_BEFORE', detail: `Balance before: ₹${before[0].current_balance}` });
+
+    // Deposit inside a committed transaction
+    await query('BEGIN');
+    log.push({ step: 'BEGIN', detail: 'Transaction started' });
+
+    await query(
+      'UPDATE account SET current_balance = current_balance + $1 WHERE account_id = $2',
+      [amount, account_id]);
+    log.push({ step: 'DEPOSIT', detail: `Deposited ₹${amount}` });
+
+    // Also insert a transaction record for audit trail
+    await query(
+      `INSERT INTO transaction (account_id, txn_type, amount, balance_after, description)
+       VALUES ($1, 'deposit', $2,
+         (SELECT current_balance FROM account WHERE account_id = $1),
+         'ACID durability test deposit')`,
+      [account_id, amount]);
+    log.push({ step: 'AUDIT_LOG', detail: 'Transaction record written to WAL + tables' });
+
+    await query('COMMIT');
+    log.push({ step: 'COMMIT', detail: 'COMMIT executed — data is now in WAL (Write-Ahead Log) on disk' });
+
+    // Verify by re-reading (simulates "after crash recovery")
+    const after = await query(
+      'SELECT current_balance FROM account WHERE account_id = $1', [account_id]);
+    log.push({ step: 'VERIFY', detail: `Balance after re-read: ₹${after[0].current_balance}` });
+    log.push({ step: 'DURABILITY_PROVEN', detail: 'Even if the server crashed NOW, this data would survive because PostgreSQL writes to WAL before acknowledging COMMIT' });
+
+    res.json({ success: true, property: 'DURABILITY', outcome: 'PERSISTED', log });
+  } catch (e) {
+    await query('ROLLBACK').catch(() => {});
+    log.push({ step: 'ERROR', detail: e.message });
+    res.json({ success: false, property: 'DURABILITY', outcome: 'ERROR', log });
+  }
 });
 
 // ════════════════════════════════════════════════════════════

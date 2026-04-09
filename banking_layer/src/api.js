@@ -123,3 +123,14 @@ export const getCustomerTransfers    = (id) => request(`/customer/${id}/transfer
 export const getCustomerStats        = (id) => request(`/customer/${id}/stats`);
 export const getCustomerPortal       = (id) => request(`/customer/${id}/portal`);
 export const getCustomerLoanApps     = (id) => request(`/customer/${id}/loan-applications`);
+
+// ACID Demo
+export const getAcidAccounts    = ()   => request('/acid/accounts');
+export const acidAtomicity      = (d)  => request('/acid/atomicity', { method: 'POST', body: JSON.stringify(d) });
+export const acidConsistency    = (d)  => request('/acid/consistency', { method: 'POST', body: JSON.stringify(d) });
+export const acidIsolation      = (d)  => request('/acid/isolation', { method: 'POST', body: JSON.stringify(d) });
+export const acidDurability     = (d)  => request('/acid/durability', { method: 'POST', body: JSON.stringify(d) });
+
+// ── Branch CRUD ──
+export const createBankBranch  = (d) => request('/branches', { method: 'POST', body: JSON.stringify(d) });
+export const updateBankBranch  = (id, d) => request(`/branches/${id}`, { method: 'PUT', body: JSON.stringify(d) });

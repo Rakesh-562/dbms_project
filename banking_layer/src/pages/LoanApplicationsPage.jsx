@@ -23,13 +23,14 @@ export default function LoanApplicationsPage() {
   const { data, loading, error, refetch } = useApi(getLoanPipeline);
   const [modal, setModal] = useState(false);
   const [selected, setSelected] = useState(null);
-  const [reviewForm, setReviewForm] = useState({ status: 'approved', notes: '' });
+  const isManager = auth.role === 'manager';
+  const [reviewForm, setReviewForm] = useState({ status: isManager ? 'approved' : 'under_review', notes: '' });
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState(null);
 
   const openReview = (row) => {
     setSelected(row);
-    setReviewForm({ status: 'approved', notes: '' });
+    setReviewForm({ status: isManager ? 'approved' : 'under_review', notes: '' });
     setMsg(null);
     setModal(true);
   };
@@ -95,13 +96,22 @@ export default function LoanApplicationsPage() {
               <p><strong>Purpose:</strong> {selected.purpose}</p>
               <p><strong>Applied:</strong> {selected.application_date?.slice(0, 10)} ({selected.days_open}d ago)</p>
             </div>
-            <FormField label="Decision">
+            <FormField label={isManager ? 'Decision' : 'Action'}>
               <Select value={reviewForm.status} onChange={e => setReviewForm(f => ({ ...f, status: e.target.value }))}>
-                <option value="approved">Approve</option>
-                <option value="rejected">Reject</option>
-                <option value="under_review">Under Review</option>
+                {isManager ? (
+                  <>
+                    <option value="approved">Approve</option>
+                    <option value="rejected">Reject</option>
+                    <option value="under_review">Under Review</option>
+                  </>
+                ) : (
+                  <option value="under_review">Mark as Under Review</option>
+                )}
               </Select>
             </FormField>
+            {!isManager && (
+              <p className="text-xs text-amber-600">As an employee, you can only mark applications as &ldquo;Under Review&rdquo;. A manager must approve or reject.</p>
+            )}
             <FormField label="Notes">
               <Input value={reviewForm.notes} onChange={e => setReviewForm(f => ({ ...f, notes: e.target.value }))} placeholder="Decision notes..." />
             </FormField>
@@ -109,7 +119,7 @@ export default function LoanApplicationsPage() {
         )}
         <div className="flex justify-end gap-2 mt-4">
           <Btn variant="secondary" onClick={() => setModal(false)}>Cancel</Btn>
-          <Btn onClick={review} disabled={saving}>{saving ? 'Submitting...' : 'Submit Decision'}</Btn>
+          <Btn onClick={review} disabled={saving}>{saving ? 'Submitting...' : isManager ? 'Submit Decision' : 'Submit Review'}</Btn>
         </div>
       </Modal>
     </>
