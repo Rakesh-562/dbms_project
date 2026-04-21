@@ -24,6 +24,9 @@ export const getTransfers     = ()  => request('/transfers');
 export const getHrUpdates     = ()  => request('/hr-updates');
 export const getBranchSummary = ()  => request('/branch-summary');
 
+// ── Search ──
+export const searchAll = (q) => request(`/search?q=${encodeURIComponent(q)}`);
+
 // ── VCS ──
 export const getActiveBranch  = ()  => request('/vcs/active-branch');
 export const getVcsBranches   = ()  => request('/vcs/branches');

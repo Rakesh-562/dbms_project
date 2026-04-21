@@ -1180,6 +1180,45 @@ app.post('/api/acid/durability', async (req, res) => {
   }
 });
 
+// ══ Global Search ══
+app.get('/api/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    if (!q) return res.json({ customers: [], accounts: [], transactions: [], loans: [], employees: [], branches: [] });
+    const pat = `%${q}%`;
+    const [customers, accounts, transactions, loans, employees, branches] = await Promise.all([
+      query(`SELECT customer_id, full_name, phone, email, occupation, status
+             FROM customer WHERE full_name ILIKE $1 OR phone ILIKE $1 OR email ILIKE $1
+             OR occupation ILIKE $1 OR pan_number ILIKE $1 OR aadhaar_number ILIKE $1
+             ORDER BY customer_id LIMIT 50`, [pat]),
+      query(`SELECT a.account_id, a.account_number, a.account_type, a.current_balance, a.status,
+                    c.full_name AS customer_name
+             FROM account a JOIN customer c ON c.customer_id = a.customer_id
+             WHERE a.account_number ILIKE $1 OR c.full_name ILIKE $1
+             ORDER BY a.account_id LIMIT 50`, [pat]),
+      query(`SELECT t.txn_id, t.txn_type, t.channel, t.amount, t.reference_number, t.description,
+                    t.txn_date, a.account_number
+             FROM transaction t JOIN account a ON a.account_id = t.account_id
+             WHERE t.reference_number ILIKE $1 OR t.description ILIKE $1
+             OR a.account_number ILIKE $1 OR t.channel ILIKE $1
+             ORDER BY t.txn_date DESC LIMIT 50`, [pat]),
+      query(`SELECT l.loan_id, l.loan_type, l.applied_amount, l.application_status, l.status,
+                    c.full_name AS customer_name
+             FROM loan l JOIN customer c ON c.customer_id = l.customer_id
+             WHERE l.loan_type ILIKE $1 OR l.purpose ILIKE $1 OR c.full_name ILIKE $1
+             OR l.application_status ILIKE $1
+             ORDER BY l.loan_id LIMIT 50`, [pat]),
+      query(`SELECT emp_id, full_name, designation, status
+             FROM employee WHERE full_name ILIKE $1 OR designation ILIKE $1
+             ORDER BY emp_id LIMIT 50`, [pat]),
+      query(`SELECT branch_id, branch_name, city, ifsc_code
+             FROM branch WHERE branch_name ILIKE $1 OR city ILIKE $1 OR ifsc_code ILIKE $1
+             ORDER BY branch_id LIMIT 50`, [pat]),
+    ]);
+    res.json({ customers, accounts, transactions, loans, employees, branches });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ════════════════════════════════════════════════════════════
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

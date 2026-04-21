@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApi } from '../hooks';
 import { getCustomers, createCustomer, updateCustomer, getBranches, getEmployees } from '../api';
 import { PageHeader, Card, DataTable, Badge, Spinner, ErrorBox, Modal, FormField, Input, Select, Btn } from '../components/UI';
+import { Search } from 'lucide-react';
 
 const statusColor = { active: 'green', dormant: 'amber', closed: 'red', blocked: 'red' };
 
@@ -52,7 +53,11 @@ export default function CustomersPage() {
       <PageHeader title="Customers" subtitle={`${data.length} records`}>
         <Btn onClick={openAdd}>+ Add Customer</Btn>
       </PageHeader>
-      <Card><DataTable columns={columns(openEdit)} rows={data} /></Card>
+      <div className="relative mb-4">
+        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by name, phone, email, occupation, PAN, Aadhaar..." className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+      </div>
+      <Card><DataTable columns={columns(openEdit)} rows={filtered} /></Card>
 
       <Modal open={!!modal} onClose={close} title={modal === 'add' ? 'Add Customer' : 'Edit Customer'}>
         <div className="grid grid-cols-2 gap-3">

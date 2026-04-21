@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApi } from '../hooks';
 import { getLoans, createLoan, updateLoan, getCustomers, getAccounts, getEmployees } from '../api';
 import { PageHeader, Card, DataTable, Badge, Spinner, ErrorBox, Modal, FormField, Input, Select, Btn } from '../components/UI';
+import { Search } from 'lucide-react';
 
 const statusColor = { active: 'green', pending: 'amber', closed: 'default', npa: 'red', written_off: 'red', foreclosed: 'red' };
 const appColor = { submitted: 'blue', under_review: 'amber', approved: 'green', rejected: 'red', disbursed: 'indigo', withdrawn: 'default' };
@@ -30,6 +31,13 @@ export default function LoansPage() {
   const [form, setForm] = useState(emptyLoan);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState(null);
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    if (!data || !search.trim()) return data || [];
+    const q = search.toLowerCase();
+    return data.filter(r => [r.customer_name, r.loan_type, r.application_status, r.status, r.purpose, r.officer_name].some(v => v && String(v).toLowerCase().includes(q)));
+  }, [data, search]);
 
   const openAdd = () => { setForm(emptyLoan); setFormError(null); setModal('add'); };
   const openEdit = (r) => { setForm({ ...r }); setFormError(null); setModal(r); };
@@ -54,7 +62,11 @@ export default function LoansPage() {
       <PageHeader title="Loans" subtitle={`${data.length} records`}>
         <Btn onClick={openAdd}>+ New Loan</Btn>
       </PageHeader>
-      <Card><DataTable columns={columns(openEdit)} rows={data} /></Card>
+      <div className="relative mb-4">
+        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Search by customer, loan type, status, purpose, officer..." className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
+      </div>
+      <Card><DataTable columns={columns(openEdit)} rows={filtered} /></Card>
 
       <Modal open={!!modal} onClose={close} title={modal === 'add' ? 'New Loan Application' : 'Update Loan'}>
         <div className="grid grid-cols-2 gap-3">
